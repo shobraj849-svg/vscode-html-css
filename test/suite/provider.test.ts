@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, it } from "mocha";
 import {
   CancellationToken,
   CompletionContext,
+  CompletionTriggerKind,
   Position,
   window,
   workspace,
@@ -27,6 +28,11 @@ describe("provider", () => {
     token = {
       isCancellationRequested: false,
       onCancellationRequested: <any>(() => false),
+    };
+
+    context = {
+      triggerKind: CompletionTriggerKind.Invoke,
+      triggerCharacter: undefined,
     };
   });
 
@@ -50,7 +56,7 @@ describe("provider", () => {
       document,
       new Position(0, 18),
       token,
-      context
+      context,
     );
 
     assert.ok(items);
@@ -74,7 +80,7 @@ describe("provider", () => {
       document,
       new Position(0, 18),
       token,
-      context
+      context,
     );
 
     assert.ok(items);
@@ -90,7 +96,7 @@ describe("provider", () => {
     const locations = await provider.provideDefinition(
       document,
       new Position(1, 13),
-      token
+      token,
     );
     assert.ok(locations);
     assert.ok("length" in locations);
