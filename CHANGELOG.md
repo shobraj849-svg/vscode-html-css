@@ -2,7 +2,7 @@
 
 All notable changes to the extension will be documented in this file.
 
-## [2.0.14] - 2025-02-12
+## [2.0.14] - 2026-02-12
 
 - Update deps for a security vulnerability
 
