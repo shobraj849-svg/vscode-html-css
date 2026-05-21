@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SOBRAJ GAMES: Coin Collector Edition</title>
+    <style>
+        body { 
+            text-align: center; background: #0a0a0a; color: white; font-family: 'Segoe UI', sans-serif; 
+            margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh;
+        }
+        h1 { color: #00d2ff; margin: 5px 0; text-shadow: 0 0 10px #00d2ff; }
+        canvas { 
+            background: #222; border: 6px solid #444; display: block; border-radius: 12px; 
+            box-shadow: 0 0 30px rgba(0,0,0,0.8); max-width: 95vw; max-height: 80vh;
+        }
+        .ui-panel { font-size: 18px; background: rgba(34, 34, 34, 0.9); padding: 12px 25px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #444; }
+        .controls { margin-bottom: 10px; background: #222; padding: 8px 20px; border-radius: 8px; }
+        input { padding: 6px; width: 60px; border-radius: 5px; border: none; text-align: center; font-weight: bold; font-size: 16px; }
+        button.jump-btn, #startBtn { padding: 10px 25px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 18px; transition: 0.3s; }
+        #restartBtn { display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); padding: 18px 45px; font-size: 24px; background: #e67e22; border: none; cursor: pointer; border-radius: 50px; color: white; font-weight: bold; z-index: 10; }
+        #splashScreen {
+            position: absolute; width: 550px; height: 750px; background: rgba(0,0,0,0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 12px; z-index: 20; border: 2px solid #333;
+        }
+        .stat { color: #f1c40f; font-weight: bold; }
+        .coin-text { color: #ffd700; font-weight: bold; margin-left: 15px; }
+    </style>
+</head>
+<body>
+    <h1>SOBRAJ GAMES</h1>
+    <div class="controls">
+        Jump Level: <input type="number" id="levelInput" min="1" max="50" value="1">
+        <button class="jump-btn" onclick="jumpToLevel()">SET</button>
+    </div>
+    <div class="ui-panel">
+        Lvl: <span id="levelVal" class="stat">1</span> | Coins: <span id="coinVal" class="coin-text">0</span> | Score: <span id="scoreVal" class="stat">0</span>
+    </div>
+
+    <div style="position: relative;">
+        <div id="splashScreen">
+            <h1 style="font-size: 60px; color: #00d2ff;">SOBRAJ</h1>
+            <h2 style="color: white;">GAMES</h2>
+            <p style="color: #ffd700; font-size: 20px;">Collect Coins & Destroy Bosses!</p>
+            <button id="startBtn" onclick="startGame()">START MISSION</button>
+        </div>
+        <canvas id="gameCanvas" width="550" height="750"></canvas>
+        <button id="restartBtn" onclick="resetGame()">RESTART</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const lanes = [65, 245, 425];
+
+        // Image Handling
+        const playerImg = new Image(); playerImg.src = 'https://imgur.com';
+        const enemyImg = new Image(); enemyImg.src = 'https://imgur.com';
+        const bossImg = new Image(); bossImg.src = 'https://imgur.com';
+
+        let carX, targetX, score, kills, coins, currentLevel, killsRequired, baseSpeed, currentSpeed;
+        let enemyY, enemyX, bullets, bombs, coinItems, gameRunning = false, nitro, nitroFuel;
+        let bossActive, bossX, bossY, bossMaxHealth, bossHealth;
+
+        function startGame() {
+            document.getElementById("splashScreen").style.display = "none";
+            init(document.getElementById("levelInput").value);
+        }
+
+        function init(startLevel = 1) {
+            currentLevel = parseInt(startLevel);
+            carX = 245; targetX = 245; score = 0; kills = 0; coins = 0;
+            killsRequired = 10 + (currentLevel * 2);
+            baseSpeed = 6 + (currentLevel * 0.4); 
+            bullets = []; bombs = []; coinItems = [];
+            enemyY = -150; enemyX = lanes[Math.floor(Math.random() * 3)];
+            bossActive = false; bossX = 175; bossY = -250;
+            nitro = false; nitroFuel = 100;
+            gameRunning = true;
+            document.getElementById("restartBtn").style.display = "none";
+            updateUI();
+            draw();
+        }
+
+        function drawEntity(img, x, y, w, h, color) {
+            if (img.complete && img.naturalWidth !== 0) ctx.drawImage(img, x, y, w, h);
+            else { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+        }
+
+        function updateUI() {
+            document.getElementById("levelVal").innerText = currentLevel;
+            document.getElementById("scoreVal").innerText = score;
+            document.getElementById("coinVal").innerText = coins;
+        }
+
+        function draw() {
+            if (!gameRunning) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Background
+            ctx.fillStyle = nitro ? "#050505" : "#222"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "rgba(255,255,255,0.2)";
+            ctx.beginPath(); ctx.moveTo(183, 0); ctx.lineTo(183, 750); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(366, 0); ctx.lineTo(366, 750); ctx.stroke();
+
+            currentSpeed = nitro ? baseSpeed * 2.5 : baseSpeed;
+            if(nitro && nitroFuel > 0) nitroFuel -= 1.5; else { nitro = false; if (nitroFuel < 100) nitroFuel += 0.5; }
+
+            carX += (targetX - carX) * 0.15;
+            drawEntity(playerImg, carX, 600, 60, 110, "#00d2ff");
+
+            // Nitro Bar
+            ctx.fillStyle = "#444"; ctx.fillRect(carX, 590, 60, 8);
+            ctx.fillStyle = "#00ff00"; ctx.fillRect(carX, 590, 60 * (nitroFuel / 100), 8);
+
+            // Spawn Coins
+            if (Math.random() < 0.02) {
+                coinItems.push({ x: lanes[Math.floor(Math.random() * 3)] + 15, y: -50 });
+            }
+
+            // Draw Coins
+            coinItems.forEach((c, i) => {
+                c.y += currentSpeed;
+                ctx.fillStyle = "#ffd700"; ctx.beginPath(); ctx.arc(c.x + 15, c.y + 15, 15, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#fff"; ctx.font = "bold 15px Arial"; ctx.fillText("$", c.x + 10, c.y + 20);
+                
+                if (c.y > 750) coinItems.splice(i, 1);
+                if (Math.abs(carX - c.x) < 45 && Math.abs(600 - c.y) < 80) {
+                    coins += 1; score += 20; coinItems.splice(i, 1); updateUI();
+                }
+            });
+
+            // Spawn Bombs
+            if (currentLevel >= 4 && Math.random() < 0.01) {
+                bombs.push({ x: lanes[Math.floor(Math.random() * 3)] + 10, y: -50 });
+            }
+
+            // Draw Bombs
+            bombs.forEach((bomb, i) => {
+                bomb.y += currentSpeed;
+                ctx.fillStyle = "black"; ctx.beginPath(); ctx.arc(bomb.x + 20, bomb.y + 20, 20, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(bomb.x + 20, bomb.y + 20, 8, 0, Math.PI * 2); ctx.fill();
+                if (bomb.y > 750) bombs.splice(i, 1);
+                if (Math.abs(carX - bomb.x) < 40 && 600 < bomb.y + 40 && 710 > bomb.y) gameRunning = false;
+            });
+
+            // Bullets
+            bullets.forEach((b, i) => {
+                b.y -= 15; ctx.fillStyle = "yellow"; ctx.fillRect(b.x, b.y, 8, 20);
+                if (bossActive && b.x >= bossX && b.x <= bossX + 200 && b.y < bossY + 150) {
+                    bossHealth--; bullets.splice(i, 1);
+                } else if (!bossActive && Math.abs(b.x - (enemyX+30)) < 40 && b.y < enemyY + 110) {
+                    enemyY = -200; enemyX = lanes[Math.floor(Math.random() * 3)];
+                    kills++; score += 50; updateUI(); bullets.splice(i, 1);
+                }
+            });
+
+            // Boss & Enemy
+            if (kills >= killsRequired && !bossActive) {
+                bossActive = true; bossY = -200; bossMaxHealth = 15 + (currentLevel * 6); bossHealth = bossMaxHealth;
+            }
+
+            if (bossActive) {
+                drawEntity(bossImg, bossX, bossY, 200, 150, "#9b59b6");
+                ctx.fillStyle = "red"; ctx.fillRect(bossX, bossY - 25, 200, 10);
+                ctx.fillStyle = "#00ff00"; ctx.fillRect(bossX, bossY - 25, 200 * (bossHealth / bossMaxHealth), 10);
+                bossY += 1.5;
+                if (bossHealth <= 0) { bossActive = false; kills = 0; currentLevel++; score += 500; updateUI(); bombs = []; coinItems = []; }
+                if (bossY > 750 || (carX + 55 > bossX && carX < bossX + 195 && 600 < bossY + 130)) gameRunning = false;
+            } else {
+                drawEntity(enemyImg, enemyX, enemyY, 60, 110, "#e74c3c");
+                enemyY += currentSpeed;
+                if (enemyY > 750) { enemyY = -200; enemyX = lanes[Math.floor(Math.random() * 3)]; score += 10; updateUI(); }
+                if (Math.abs(carX - enemyX) < 55 && 600 < enemyY + 105 && 710 > enemyY) gameRunning = false;
+            }
+
+            if (!gameRunning) document.getElementById("restartBtn").style.display = "block";
+            else requestAnimationFrame(draw);
+        }
+
+        document.addEventListener("keydown", (e) => {
+            if (!gameRunning) return;
+            let cur = lanes.indexOf(targetX);
+            if (e.key === "ArrowLeft" && cur > 0) targetX = lanes[cur - 1];
+            if (e.key === "ArrowRight" && cur < 2) targetX = lanes[cur + 1];
+            if (e.key === " ") bullets.push({ x: targetX + 26, y: 590 });
+            if (e.key === "Shift") nitro = true;
+        });
+        document.addEventListener("keyup", (e) => { if (e.key === "Shift") nitro = false; });
+        function resetGame() { init(document.getElementById("levelInput").value); }
+        function jumpToLevel() { document.getElementById("levelVal").innerText = document.getElementById("levelInput").value; }
+    </script>
+</body>
+</html>
